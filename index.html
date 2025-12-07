@@ -1,96 +1,131 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Braille ASCII Art Generator</title>
-<style>
-  :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;color-scheme:dark}
-  html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
-  body{background:linear-gradient(180deg,#071029 0%, #071b2b 100%);color:#e6eef6;display:flex;align-items:flex-start;justify-content:center;padding:28px}
-  .wrap{width:100%;max-width:1100px}
-  .card{background:rgba(255,255,255,0.03);border-radius:12px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
-  h1{margin:0 0 10px 0;font-size:20px}
-  .row{display:flex;gap:12px;flex-wrap:wrap}
-  .col{flex:1 1 260px}
-  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-  input[type=file]{color:transparent}
-  input[type=number], input[type=range], input[type=text], select{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
-  button{background:var(--accent);border:none;color:#022;background:none;padding:8px 12px;border-radius:8px;font-weight:600;cursor:pointer}
-  button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
-  .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .preview{display:flex;gap:12px;align-items:flex-start}
-  canvas{background:#fff;border-radius:6px;max-width:100%;height:auto}
-  pre.output{white-space:pre;overflow:auto;padding:12px;border-radius:8px;background:#00121a;color:#e6eef6;font-family:monospace;line-height:0.9}
-  .small{font-size:12px;color:var(--muted)}
-  .actions{display:flex;gap:8px;flex-wrap:wrap}
-  footer.small{margin-top:12px;color:var(--muted);font-size:13px}
-  @media(max-width:720px){.controls{grid-template-columns:1fr} .row{flex-direction:column}}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Braille ASCII Art Generator</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#071029;
+      --card:#071428;
+      --accent:#06b6d4;
+      --muted:#9fb0c6;
+      color-scheme: dark;
+    }
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;background:linear-gradient(180deg,var(--bg) 0%, #071b2b 100%);color:#e6eef6}
+    .wrap{max-width:1100px;margin:18px auto;padding:10px} /* уменьшил отступы по бокам */
+    .card-app{background:rgba(255,255,255,0.03);border-radius:12px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+    h1{font-size:20px;margin-bottom:12px}
+    label.small{font-size:13px;color:var(--muted)}
+    .controls .form-control, .controls .form-select {background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit}
+    .btn-primary{background:var(--accent);border-color:var(--accent)}
+    canvas{background:#fff;border-radius:6px;max-width:100%;height:auto;display:block}
+    pre.output{white-space:pre;overflow:auto;padding:16px;border-radius:8px;background:#00121a;color:#e6eef6;font-family:monospace;line-height:0.95;min-height:140px;max-height:520px}
+    .small-muted{font-size:12px;color:var(--muted)}
+    /* mobile tweaks */
+    @media(max-width:767.98px){
+      .wrap{padding:6px}
+      .card-app{padding:12px}
+    }
+  </style>
 </head>
 <body>
-<div class="wrap card">
-  <h1>Braille ASCII Art Generator — single page (client-side)</h1>
-  <div class="row" style="align-items:flex-start">
-    <div class="col">
-      <label class="small">Загрузить изображение</label>
-      <input id="file" type="file" accept="image/*">
-      <div style="height:12px"></div>
-      <div class="controls">
-        <div>
-          <label>Ширина в символах (chars)</label>
-          <input id="outWidth" type="number" min="1" value="80">
+  <div class="wrap">
+    <div class="card-app">
+      <h1>Braille ASCII Art Generator — client-side</h1>
+
+      <div class="row gx-3">
+        <!-- LEFT: controls -->
+        <div class="col-12 col-md-5">
+          <div class="mb-3">
+            <label class="small">Загрузить изображение</label>
+            <input id="file" class="form-control form-control-sm" type="file" accept="image/*">
+          </div>
+
+          <div class="controls">
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="small">Ширина в символах</label>
+                <input id="outWidth" type="number" class="form-control form-control-sm" min="1" value="80">
+              </div>
+              <div class="col-6">
+                <label class="small">Высота в символах</label>
+                <input id="outHeight" type="number" class="form-control form-control-sm" min="1" value="30">
+              </div>
+            </div>
+
+            <div class="row g-2 mb-2 align-items-center">
+              <div class="col-6">
+                <div class="form-check">
+                  <input id="keepAspect" class="form-check-input" type="checkbox" checked>
+                  <label class="form-check-label small-muted" for="keepAspect">Сохранить соотношение</label>
+                </div>
+              </div>
+              <div class="col-6">
+                <label class="small">Размер шрифта (px)</label>
+                <input id="fontSize" type="number" class="form-control form-control-sm" min="6" max="48" value="12">
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="small">Порог (threshold) 0..255</label>
+              <div class="d-flex align-items-center gap-2">
+                <input id="threshold" type="range" class="form-range" min="0" max="255" value="128" style="flex:1">
+                <div id="thresholdVal" class="small-muted" style="width:46px;text-align:center">128</div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="small">Инвертировать</label>
+              <select id="invert" class="form-select form-select-sm">
+                <option value="0">Нет</option>
+                <option value="1">Да</option>
+              </select>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap mb-2">
+              <button id="generate" class="btn btn-primary btn-sm">Сгенерировать</button>
+              <button id="downloadTxt" class="btn btn-outline-light btn-sm">Скачать .txt</button>
+              <button id="copy" class="btn btn-outline-light btn-sm">Копировать</button>
+              <button id="downloadPng" class="btn btn-outline-light btn-sm">Скачать PNG</button>
+            </div>
+
+            <div class="small-muted">Подсказка: каждый символ braille кодирует блок 2×4 пикселя. Указывайте ширину/высоту в символах.</div>
+          </div>
         </div>
-        <div>
-          <label>Высота в символах (chars)</label>
-          <input id="outHeight" type="number" min="1" value="30">
-        </div>
-        <div>
-          <label>Сохранить соотношение (chars)</label>
-          <div style="display:flex;gap:8px;align-items:center"><input id="keepAspect" type="checkbox" checked><span class="small">(если отмечено, высота пересчитывается)</span></div>
-        </div>
-        <div>
-          <label>Порог (threshold) 0..255</label>
-          <input id="threshold" type="range" min="0" max="255" value="128">
-          <div class="small" id="thresholdVal">128</div>
-        </div>
-        <div>
-          <label>Инвертировать</label>
-          <select id="invert"><option value="0">Нет</option><option value="1">Да</option></select>
-        </div>
-        <div>
-          <label>Размер шрифта вывода (px)</label>
-          <input id="fontSize" type="number" min="6" max="48" value="12">
+
+        <!-- RIGHT: previews and output (vertical stack) -->
+        <div class="col-12 col-md-7">
+          <div class="d-flex flex-column gap-3">
+            <div>
+              <label class="small">Исходное изображение / изменённый холст</label>
+              <div class="d-flex gap-2 flex-wrap align-items-start">
+                <!-- можно уменьшить размеры превью если нужно -->
+                <canvas id="srcCanvas" width="360" height="240" style="max-width:46%;"></canvas>
+                <canvas id="resCanvas" width="360" height="240" style="max-width:46%;"></canvas>
+              </div>
+            </div>
+
+            <div>
+              <label class="small">Результат (текст с символами Braille)</label>
+              <pre id="output" class="output" contenteditable></pre>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style="height:12px"></div>
-      <div class="actions">
-        <button id="generate">Сгенерировать</button>
-        <button id="downloadTxt" class="secondary">Скачать .txt</button>
-        <button id="copy" class="secondary">Копировать</button>
-        <button id="downloadPng" class="secondary">Скачать PNG</button>
-      </div>
-      <div style="height:12px"></div>
-      <div class="small">Подсказка: каждый символ braille кодирует блок 2×4 пикселя. Указывайте ширину/высоту в символах.</div>
-    </div>
-
-    <div class="col">
-      <label class="small">Исходное изображение / изменённый холст</label>
-      <div class="preview">
-        <canvas id="srcCanvas" width="240" height="180" style="border:1px solid rgba(255,255,255,0.04)"></canvas>
-        <canvas id="resCanvas" width="240" height="180" style="border:1px solid rgba(255,255,255,0.04)"></canvas>
-      </div>
-      <div style="height:12px"></div>
-      <label class="small">Результат (текст с символами Braille)</label>
-      <div style="height:8px"></div>
-      <pre id="output" class="output" contenteditable></pre>
+      <div class="mt-3 small-muted">Работает полностью на клиенте — можно заливать на GitHub Pages (github.io). Ограничения: нет multi-threading на github.io.</div>
     </div>
   </div>
-  <footer class="small">Работает полностью на клиенте — можно заливать на GitHub Pages (github.io). Ограничения: нет multi-threading на github.io.</footer>
-</div>
 
-<!-- Подключаем внешний скрипт генератора -->
-<script src="braille-generator.js"></script>
+  <!-- Подключаем JS: ваш внешний скрипт (оставьте рядом в репозитории) -->
+  <script src="braille-generator.js"></script>
+
+  <!-- Подключение Bootstrap JS (если понадобится, необязательно) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
