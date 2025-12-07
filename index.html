@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Braille ASCII Art Generator</title>
+<style>
+  :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;color-scheme:dark}
+  html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
+  body{background:linear-gradient(180deg,#071029 0%, #071b2b 100%);color:#e6eef6;display:flex;align-items:flex-start;justify-content:center;padding:28px}
+  .wrap{width:100%;max-width:1100px}
+  .card{background:rgba(255,255,255,0.03);border-radius:12px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+  h1{margin:0 0 10px 0;font-size:20px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .col{flex:1 1 260px}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input[type=file]{color:transparent}
+  input[type=number], input[type=range], input[type=text], select{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+  button{background:var(--accent);border:none;color:#022;background:none;padding:8px 12px;border-radius:8px;font-weight:600;cursor:pointer}
+  button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .preview{display:flex;gap:12px;align-items:flex-start}
+  canvas{background:#fff;border-radius:6px;max-width:100%;height:auto}
+  pre.output{white-space:pre;overflow:auto;padding:12px;border-radius:8px;background:#00121a;color:#e6eef6;font-family:monospace;line-height:0.9}
+  .small{font-size:12px;color:var(--muted)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  footer.small{margin-top:12px;color:var(--muted);font-size:13px}
+  @media(max-width:720px){.controls{grid-template-columns:1fr} .row{flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap card">
+  <h1>Braille ASCII Art Generator — single page (client-side)</h1>
+  <div class="row" style="align-items:flex-start">
+    <div class="col">
+      <label class="small">Загрузить изображение</label>
+      <input id="file" type="file" accept="image/*">
+      <div style="height:12px"></div>
+      <div class="controls">
+        <div>
+          <label>Ширина в символах (chars)</label>
+          <input id="outWidth" type="number" min="1" value="80">
+        </div>
+        <div>
+          <label>Высота в символах (chars)</label>
+          <input id="outHeight" type="number" min="1" value="30">
+        </div>
+        <div>
+          <label>Сохранить соотношение (chars)</label>
+          <div style="display:flex;gap:8px;align-items:center"><input id="keepAspect" type="checkbox" checked><span class="small">(если отмечено, высота пересчитывается)</span></div>
+        </div>
+        <div>
+          <label>Порог (threshold) 0..255</label>
+          <input id="threshold" type="range" min="0" max="255" value="128">
+          <div class="small" id="thresholdVal">128</div>
+        </div>
+        <div>
+          <label>Инвертировать</label>
+          <select id="invert"><option value="0">Нет</option><option value="1">Да</option></select>
+        </div>
+        <div>
+          <label>Размер шрифта вывода (px)</label>
+          <input id="fontSize" type="number" min="6" max="48" value="12">
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+      <div class="actions">
+        <button id="generate">Сгенерировать</button>
+        <button id="downloadTxt" class="secondary">Скачать .txt</button>
+        <button id="copy" class="secondary">Копировать</button>
+        <button id="downloadPng" class="secondary">Скачать PNG</button>
+      </div>
+      <div style="height:12px"></div>
+      <div class="small">Подсказка: каждый символ braille кодирует блок 2×4 пикселя. Указывайте ширину/высоту в символах.</div>
+    </div>
+
+    <div class="col">
+      <label class="small">Исходное изображение / изменённый холст</label>
+      <div class="preview">
+        <canvas id="srcCanvas" width="240" height="180" style="border:1px solid rgba(255,255,255,0.04)"></canvas>
+        <canvas id="resCanvas" width="240" height="180" style="border:1px solid rgba(255,255,255,0.04)"></canvas>
+      </div>
+      <div style="height:12px"></div>
+      <label class="small">Результат (текст с символами Braille)</label>
+      <div style="height:8px"></div>
+      <pre id="output" class="output" contenteditable></pre>
+    </div>
+  </div>
+  <footer class="small">Работает полностью на клиенте — можно заливать на GitHub Pages (github.io). Ограничения: нет multi-threading на github.io.</footer>
+</div>
+
+<script>
+// Helpers and DOM
+const fileInput = document.getElementById('file');
+const outW = document.getElementById('outWidth');
+const outH = document.getElementById('outHeight');
+const keepAspect = document.getElementById('keepAspect');
+const thresholdEl = document.getElementById('threshold');
+const thresholdVal = document.getElementById('thresholdVal');
+const invertEl = document.getElementById('invert');
+const generateBtn = document.getElementById('generate');
+const outputPre = document.getElementById('output');
+const srcCanvas = document.getElementById('srcCanvas');
+const resCanvas = document.getElementById('resCanvas');
+const downloadTxt = document.getElementById('downloadTxt');
+const copyBtn = document.getElementById('copy');
+const downloadPng = document.getElementById('downloadPng');
+const fontSizeIn = document.getElementById('fontSize');
+
+let img = new Image();
+let srcCtx = srcCanvas.getContext('2d');
+let resCtx = resCanvas.getContext('2d');
+
+thresholdEl.oninput = ()=> thresholdVal.textContent = thresholdEl.value;
+
+fileInput.addEventListener('change', async (e)=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const url = URL.createObjectURL(f);
+  img = new Image();
+  img.onload = ()=>{
+    // draw to srcCanvas (fit)
+    const maxW = 480; const maxH = 360;
+    let w = img.width, h = img.height;
+    const scale = Math.min(maxW/w, maxH/h, 1);
+    w = Math.round(w*scale); h = Math.round(h*scale);
+    srcCanvas.width = w; srcCanvas.height = h;
+    srcCtx.imageSmoothingEnabled = true;
+    srcCtx.clearRect(0,0,w,h);
+    srcCtx.drawImage(img,0,0,w,h);
+  };
+  img.src = url;
+});
+
+// core conversion
+function rgbaToLuma(r,g,b){return 0.299*r + 0.587*g + 0.114*b}
+
+function generateBraille(image, charsW, charsH, threshold, invert){
+  // charsW x charsH chars, each char = 2x4 pixels
+  const pxW = charsW * 2;
+  const pxH = charsH * 4;
+  // render into resCanvas to show resized image
+  resCanvas.width = pxW; resCanvas.height = pxH;
+  // use an offscreen canvas to draw resized image
+  const off = document.createElement('canvas');
+  off.width = pxW; off.height = pxH;
+  const offCtx = off.getContext('2d');
+  offCtx.imageSmoothingEnabled = true;
+  offCtx.clearRect(0,0,pxW,pxH);
+  // draw image maintaining aspect ratio and covering space
+  // we'll fit image into pxW x pxH preserving aspect
+  const iw = image.width, ih = image.height;
+  const scale = Math.min(pxW/iw, pxH/ih);
+  const dw = Math.round(iw*scale), dh = Math.round(ih*scale);
+  const dx = Math.round((pxW - dw)/2), dy = Math.round((pxH - dh)/2);
+  offCtx.drawImage(image, 0,0,iw,ih, dx,dy,dw,dh);
+  // copy image to resCanvas but scaled to pxW x pxH
+  resCtx.clearRect(0,0,pxW,pxH);
+  resCtx.drawImage(off,0,0);
+
+  const imgd = offCtx.getImageData(0,0,pxW,pxH).data;
+  let out = '';
+  for(let cy=0; cy<charsH; cy++){
+    let line = '';
+    for(let cx=0; cx<charsW; cx++){
+      let mask = 0;
+      // for each of 4 rows and 2 cols
+      for(let r=0;r<4;r++){
+        for(let c=0;c<2;c++){
+          const px = cx*2 + c;
+          const py = cy*4 + r;
+          const idx = (py*pxW + px) * 4;
+          const rcol = imgd[idx];
+          const gcol = imgd[idx+1];
+          const bcol = imgd[idx+2];
+          const l = rgbaToLuma(rcol,gcol,bcol);
+          const dotOn = invert ? (l < threshold) : (l > threshold);
+          if(dotOn){
+            // mapping row r and col c to braille dot number
+            let dot;
+            if(c===0){ // left column
+              // r:0->1,1->2,2->3,3->7
+              dot = [1,2,3,7][r];
+            } else { // right col
+              // r:0->4,1->5,2->6,3->8
+              dot = [4,5,6,8][r];
+            }
+            mask |= (1 << (dot-1));
+          }
+        }
+      }
+      const ch = String.fromCharCode(0x2800 + mask);
+      line += ch;
+    }
+    out += line + '\n';
+  }
+  return out;
+}
+
+// Generate on button
+generateBtn.addEventListener('click', ()=>{
+  if(!img || !img.complete){alert('Сначала загрузите изображение');return}
+  let w = parseInt(outW.value) || 80;
+  let h = parseInt(outH.value) || 30;
+  const thresh = parseInt(thresholdEl.value);
+  const inv = invertEl.value === '1';
+  // keep aspect -> recompute h from original aspect
+  if(keepAspect.checked){
+    // desired pixel width = w*2; compute pixel height preserving img aspect
+    const pxW = w*2;
+    const pxH = Math.round(img.height * (pxW / img.width));
+    h = Math.max(1, Math.round(pxH / 4));
+    outH.value = h;
+  }
+  // bounds
+  w = Math.max(1, Math.min(400, w));
+  h = Math.max(1, Math.min(400, h));
+  const txt = generateBraille(img, w, h, thresh, inv);
+  outputPre.textContent = txt;
+  outputPre.style.fontSize = fontSizeIn.value + 'px';
+});
+
+// download as txt
+downloadTxt.addEventListener('click', ()=>{
+  const txt = outputPre.textContent || '';
+  const blob = new Blob([txt], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'braille.txt';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+
+// copy
+copyBtn.addEventListener('click', async ()=>{
+  try{
+    await navigator.clipboard.writeText(outputPre.textContent || '');
+    copyBtn.textContent = 'Скопировано!';
+    setTimeout(()=> copyBtn.textContent = 'Копировать', 1200);
+  }catch(e){alert('Не удалось скопировать: ' + e)}
+});
+
+// download PNG: render output text to canvas and save
+downloadPng.addEventListener('click', ()=>{
+  const txt = outputPre.textContent || '';
+  if(!txt) return alert('Нет данных для экспорта');
+  const lines = txt.split('\n');
+  const fs = parseInt(fontSizeIn.value) || 12;
+  const charW = Math.ceil(fs * 0.6);
+  const charH = Math.ceil(fs * 0.95);
+  const width = (lines[0]?.length || 0) * charW || 1;
+  const height = lines.length * charH || 1;
+  const c = document.createElement('canvas');
+  c.width = Math.min(8192, width);
+  c.height = Math.min(8192, height);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#00121a'; ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle = '#e6eef6'; ctx.font = fs + 'px monospace'; ctx.textBaseline = 'top';
+  for(let i=0;i<lines.length;i++){
+    ctx.fillText(lines[i], 0, i*charH + 1);
+  }
+  const url = c.toDataURL('image/png');
+  const a = document.createElement('a'); a.href = url; a.download = 'braille.png'; document.body.appendChild(a); a.click(); a.remove();
+});
+
+// Small UX: auto-generate when image loaded
+img.addEventListener && img.addEventListener('load', ()=>{
+  // nothing
+});
+
+</script>
+</body>
+</html>
