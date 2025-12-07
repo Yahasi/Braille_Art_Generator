@@ -19,7 +19,7 @@
     }
     html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;background:linear-gradient(180deg,var(--bg) 0%, var(--bg2) 100%);color:#e6fff3}
     /* ещё меньше отступов слева/справа */
-    .wrap{max-width:1300px;margin:6px auto;padding:4px}
+    .wrap{max-width:1300px;margin:6px auto;padding:2px}
     .card-app{background:rgba(255,255,255,0.03);border-radius:12px;padding:14px;box-shadow:0 6px 30px rgba(2,6,23,0.45)}
     h1{font-size:20px;margin-bottom:10px}
     label.small{font-size:13px;color:var(--muted)}
@@ -29,6 +29,7 @@
     pre.output{white-space:pre;overflow:auto;padding:12px;border-radius:8px;background:rgba(0,18,10,0.9);color:#e6fff3;font-family:monospace;line-height:0.95;min-height:160px;max-height:700px}
     .small-muted{font-size:12px;color:var(--muted)}
     .preview-stack canvas{border:1px solid rgba(255,255,255,0.05);}
+    .val-box{width:56px;text-align:center}
     @media(max-width:767.98px){
       .wrap{padding:4px}
       .card-app{padding:10px}
@@ -77,7 +78,7 @@
               <label class="small">Порог (threshold) 0..255</label>
               <div class="d-flex align-items-center gap-2">
                 <input id="threshold" type="range" class="form-range" min="0" max="255" value="128" style="flex:1">
-                <div id="thresholdVal" class="small-muted" style="width:46px;text-align:center">128</div>
+                <div id="thresholdVal" class="small-muted val-box">128</div>
               </div>
             </div>
 
@@ -92,19 +93,31 @@
             <hr style="border-color:rgba(255,255,255,0.03)" />
             <div class="mb-2">
               <label class="small">Яркость (brightness)</label>
-              <input id="brightness" type="range" class="form-range" min="-100" max="100" value="0">
+              <div class="d-flex align-items-center gap-2">
+                <input id="brightness" type="range" class="form-range" min="-100" max="100" value="0" style="flex:1">
+                <div id="brightnessVal" class="small-muted val-box">0</div>
+              </div>
             </div>
             <div class="mb-2">
               <label class="small">Контраст (contrast)</label>
-              <input id="contrast" type="range" class="form-range" min="-100" max="100" value="0">
+              <div class="d-flex align-items-center gap-2">
+                <input id="contrast" type="range" class="form-range" min="-100" max="100" value="0" style="flex:1">
+                <div id="contrastVal" class="small-muted val-box">0</div>
+              </div>
             </div>
             <div class="mb-2">
               <label class="small">Насыщенность (saturation)</label>
-              <input id="saturation" type="range" class="form-range" min="-100" max="100" value="0">
+              <div class="d-flex align-items-center gap-2">
+                <input id="saturation" type="range" class="form-range" min="-100" max="100" value="0" style="flex:1">
+                <div id="saturationVal" class="small-muted val-box">0</div>
+              </div>
             </div>
             <div class="mb-2">
               <label class="small">Резкость (sharpness)</label>
-              <input id="sharpness" type="range" class="form-range" min="0" max="5" step="0.1" value="0">
+              <div class="d-flex align-items-center gap-2">
+                <input id="sharpness" type="range" class="form-range" min="0" max="5" step="0.1" value="0" style="flex:1">
+                <div id="sharpnessVal" class="small-muted val-box">0.0</div>
+              </div>
             </div>
 
             <div class="d-flex gap-2 flex-wrap mb-2 mt-2">
@@ -114,7 +127,11 @@
               <button id="downloadPng" class="btn btn-outline-light btn-sm">Скачать PNG</button>
             </div>
 
-            <div class="small-muted">Подсказка: каждый символ braille кодирует блок 2×4 пикселя. Редактируйте изображение слева — редакция применяется на правый (редактируемый) холст.</div>
+            <div class="d-flex gap-2 mt-1">
+              <button id="resetEdits" class="btn btn-sm btn-secondary">Сбросить редактирование</button>
+            </div>
+
+            <div class="small-muted mt-2">Подсказка: каждый символ braille кодирует блок 2×4 пикселя. Редактируйте изображение слева — редакция применяется на правый (редактируемый) холст.</div>
           </div>
         </div>
 
@@ -150,6 +167,46 @@
 
   <!-- Подключаем JS: ваш внешний скрипт (оставьте рядом в репозитории) -->
   <script src="braille-generator.js"></script>
+
+  <!-- Дополнительный скрипт для отображения значений и кнопки сброса -->
+  <script>
+    (function(){
+      function $(id){return document.getElementById(id)}
+      const pairs = [
+        ['brightness','brightnessVal', '0'],
+        ['contrast','contrastVal', '0'],
+        ['saturation','saturationVal', '0'],
+        ['sharpness','sharpnessVal', '0.0']
+      ];
+      pairs.forEach(([rangeId,valId,def])=>{
+        const r = $(rangeId), v = $(valId);
+        if(!r || !v) return;
+        const fmt = rangeId === 'sharpness' ? (x=>parseFloat(x).toFixed(1)) : (x=>parseInt(x));
+        v.textContent = fmt(r.value);
+        r.addEventListener('input', ()=>{ v.textContent = fmt(r.value); });
+      });
+
+      // threshold already handled in main script, but ensure display exists
+      const th = $('threshold'); const thv = $('thresholdVal');
+      if(th && thv){ thv.textContent = th.value; th.addEventListener('input', ()=> thv.textContent = th.value); }
+
+      // reset button: set all ranges to defaults and dispatch input events so main script applies changes
+      const reset = $('resetEdits');
+      if(reset){
+        reset.addEventListener('click', ()=>{
+          pairs.forEach(([rangeId,valId,def])=>{
+            const r = $(rangeId); const v = $(valId);
+            if(!r || !v) return;
+            r.value = def;
+            // update displayed value
+            v.textContent = (rangeId === 'sharpness') ? parseFloat(def).toFixed(1) : parseInt(def);
+            // dispatch input event so main script applies adjustments
+            r.dispatchEvent(new Event('input', {bubbles:true}));
+          });
+        });
+      }
+    })();
+  </script>
 
   <!-- Подключение Bootstrap JS (если понадобится, необязательно) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
